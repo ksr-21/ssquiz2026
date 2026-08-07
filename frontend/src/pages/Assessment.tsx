@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import api from '../api/client';
+import { collection, query, getDocs, doc, getDoc, where, addDoc, updateDoc, serverTimestamp, writeBatch, limit } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import { useStore } from '../store/useStore';
 
 interface Question {
@@ -32,24 +33,103 @@ export default function Assessment() {
 
     const startAssessment = async () => {
       try {
-        const response = await api.post('/assessment/start', { candidateId });
-        setSessionId(response.data.sessionId);
-        setQuestions(response.data.questions);
+        const candidateDoc = await getDoc(doc(db, 'candidates', candidateId));
+        if (!candidateDoc.exists()) throw new Error('Candidate not found');
+        const candidate = candidateDoc.data();
+
+        const existingSessionSnap = await getDocs(query(collection(db, 'sessions'), where('candidateId', '==', candidateId), limit(1)));
         
-        const start = new Date(response.data.startTime).getTime();
+        let sessionRefId = '';
+        let formattedQuestions: Question[] = [];
+        let sessionStartTime: any;
+
+        if (!existingSessionSnap.empty) {
+          const sessionDoc = existingSessionSnap.docs[0];
+          const existingSession = sessionDoc.data();
+          if (existingSession.status === 'COMPLETED') throw new Error('Assessment already completed.');
+          if (existingSession.status === 'TERMINATED') throw new Error('Assessment was terminated due to policy violations.');
+          
+          sessionRefId = sessionDoc.id;
+          sessionStartTime = existingSession.startTime;
+          
+          const answersSnap = await getDocs(query(collection(db, 'answers'), where('sessionId', '==', sessionRefId)));
+          for (const ansDoc of answersSnap.docs) {
+            const ans = ansDoc.data();
+            const questionDoc = await getDoc(doc(db, 'questions', ans.questionId));
+            if (questionDoc.exists()) {
+              const q = questionDoc.data();
+              formattedQuestions.push({
+                id: questionDoc.id,
+                text: q.text,
+                options: q.options,
+                selectedOpt: ans.selectedOpt ?? null
+              });
+            }
+          }
+        } else {
+          // New Session
+          const domainIds = candidate.domainIds || [];
+          const numDomains = domainIds.length;
+          const questionsPerDomain = numDomains === 1 ? 30 : numDomains === 2 ? 15 : 10;
+          let selectedQuestions: any[] = [];
+
+          for (const domainId of domainIds) {
+            const allDomainQsSnap = await getDocs(query(collection(db, 'questions'), where('domainId', '==', domainId)));
+            const allDomainQs = allDomainQsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            const shuffled = [...allDomainQs].sort(() => 0.5 - Math.random());
+            selectedQuestions.push(...shuffled.slice(0, questionsPerDomain));
+          }
+          selectedQuestions = [...selectedQuestions].sort(() => 0.5 - Math.random());
+
+          const sessionRef = await addDoc(collection(db, 'sessions'), {
+            candidateId,
+            status: 'IN_PROGRESS',
+            startTime: serverTimestamp(),
+            endTime: null,
+            score: null,
+            deviceInfo: navigator.userAgent || null,
+            violationsCount: 0
+          });
+          sessionRefId = sessionRef.id;
+          sessionStartTime = new Date(); // Approximate since serverTimestamp is pending
+
+          const batch = writeBatch(db);
+          for (const q of selectedQuestions) {
+            const ansRef = doc(collection(db, 'answers'));
+            batch.set(ansRef, {
+              sessionId: sessionRefId,
+              questionId: q.id,
+              selectedOpt: null,
+              savedAt: serverTimestamp()
+            });
+          }
+          await batch.commit();
+
+          formattedQuestions = selectedQuestions.map(q => ({
+            id: q.id,
+            text: q.text,
+            options: q.options,
+            selectedOpt: null
+          }));
+        }
+
+        setSessionId(sessionRefId);
+        setQuestions(formattedQuestions);
+        
+        const start = sessionStartTime?.toDate ? sessionStartTime.toDate().getTime() : sessionStartTime.getTime ? sessionStartTime.getTime() : new Date().getTime();
         const now = new Date().getTime();
         const elapsedSeconds = Math.floor((now - start) / 1000);
         const remaining = Math.max((45 * 60) - elapsedSeconds, 0);
         setTimeLeft(remaining);
 
         if (remaining <= 0) {
-          submitAssessment(response.data.sessionId);
+          submitAssessment(sessionRefId);
         }
       } catch (error: any) {
-        const message = error.response?.data?.error || error.message || 'Failed to start assessment';
+        const message = error.message || 'Failed to start assessment';
         setErrorMsg(message);
         toast.error(message);
-        if (error.response?.status === 403) {
+        if (message.includes('completed') || message.includes('terminated')) {
           navigate('/result');
         }
       } finally {
@@ -81,9 +161,30 @@ export default function Assessment() {
 
   const submitAssessment = useCallback(async (sId: string) => {
     try {
-      const response = await api.post('/assessment/submit', { sessionId: sId });
+      const answersSnap = await getDocs(query(collection(db, 'answers'), where('sessionId', '==', sId)));
+      let score = 0;
+
+      for (const ansDoc of answersSnap.docs) {
+        const ans = ansDoc.data();
+        if (ans.selectedOpt != null) {
+          const questionDoc = await getDoc(doc(db, 'questions', ans.questionId));
+          if (questionDoc.exists()) {
+            const q = questionDoc.data();
+            if (ans.selectedOpt === q.correctOption) {
+              score += q.marks || 1;
+            }
+          }
+        }
+      }
+
+      await updateDoc(doc(db, 'sessions', sId), {
+        status: 'COMPLETED',
+        endTime: serverTimestamp(),
+        score
+      });
+
       toast.success('Assessment submitted successfully');
-      navigate('/result', { state: { score: response.data.score } });
+      navigate('/result', { state: { score } });
     } catch (error) {
       toast.error('Failed to submit assessment');
     }
@@ -98,18 +199,34 @@ export default function Assessment() {
 
     const MAX_VIOLATIONS = 3;
 
-    const handleViolation = (reason: string) => {
+    const handleViolation = async (reason: string) => {
       violationCountRef.current += 1;
       const currentCount = violationCountRef.current;
       
-      // Log violation to backend
-      api.post('/assessment/violation', { sessionId, type: reason });
+      try {
+        await addDoc(collection(db, 'violations'), {
+          sessionId,
+          type: reason,
+          timestamp: serverTimestamp(),
+          description: 'Frontend violation detected'
+        });
 
-      if (currentCount >= MAX_VIOLATIONS) {
-        toast.error('Assessment terminated due to excessive violations.');
-        submitAssessment(sessionId!);
-      } else {
-        toast.warning(`Warning ${currentCount}/${MAX_VIOLATIONS}: ${reason}. Your assessment will be terminated after 3 warnings.`);
+        await updateDoc(doc(db, 'sessions', sessionId!), {
+          violationsCount: currentCount
+        });
+
+        if (currentCount >= MAX_VIOLATIONS) {
+          await updateDoc(doc(db, 'sessions', sessionId!), {
+            status: 'TERMINATED',
+            endTime: serverTimestamp()
+          });
+          toast.error('Assessment terminated due to excessive violations.');
+          submitAssessment(sessionId!);
+        } else {
+          toast.warning(`Warning ${currentCount}/${MAX_VIOLATIONS}: ${reason}. Your assessment will be terminated after 3 warnings.`);
+        }
+      } catch (err) {
+        console.error('Failed to log violation', err);
       }
     };
 
@@ -173,11 +290,13 @@ export default function Assessment() {
     });
 
     try {
-      await api.post('/assessment/save-answer', {
-        sessionId,
-        questionId: currentQ.id,
-        selectedOpt: optIndex
-      });
+      const ansSnap = await getDocs(query(collection(db, 'answers'), where('sessionId', '==', sessionId), where('questionId', '==', currentQ.id), limit(1)));
+      if (!ansSnap.empty) {
+        await updateDoc(doc(db, 'answers', ansSnap.docs[0].id), {
+          selectedOpt: optIndex,
+          savedAt: serverTimestamp()
+        });
+      }
     } catch (error) {
       toast.error('Failed to save answer');
     }

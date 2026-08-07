@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import api from '../../api/client';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../../config/firebase';
 
 export default function AdminLogin() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -14,15 +15,16 @@ export default function AdminLogin() {
     setLoading(true);
     
     try {
-      const response = await api.post('/admin/login', { username, password });
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
-      // Store token
-      localStorage.setItem('adminToken', response.data.token);
+      // Store token (Firebase handles its own tokens, but we can store a flag or token if needed by logic)
+      const token = await userCredential.user.getIdToken();
+      localStorage.setItem('adminToken', token);
       
       toast.success('Login successful!');
       navigate('/admin/dashboard');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Login failed. Invalid credentials.');
+      toast.error(error.message || 'Login failed. Invalid credentials.');
     } finally {
       setLoading(false);
     }
@@ -38,13 +40,13 @@ export default function AdminLogin() {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-textPrimary mb-1">Username</label>
+            <label className="block text-sm font-medium text-textPrimary mb-1">Email</label>
             <input 
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
-              placeholder="Enter username"
+              placeholder="Enter email"
               required
             />
           </div>

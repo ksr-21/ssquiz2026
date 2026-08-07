@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import api from '../../api/client';
+import { collection, query, orderBy, getDocs, doc, getDoc, where } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 interface Candidate {
   id: string;
@@ -30,15 +31,44 @@ export default function AdminDashboard() {
   const fetchCandidates = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/candidates');
-      setCandidates(response.data);
+      const candidatesSnap = await getDocs(query(collection(db, 'candidates'), orderBy('createdAt', 'desc')));
+      const candidatesData = [];
+      
+      for (const candidateDoc of candidatesSnap.docs) {
+        const data = candidateDoc.data();
+        
+        const domainDetails = [];
+        if (data.domainIds && Array.isArray(data.domainIds)) {
+          for (const domainId of data.domainIds) {
+            const dSnap = await getDoc(doc(db, 'domains', domainId));
+            if (dSnap.exists()) {
+              domainDetails.push({ domainId, domain: { id: domainId, ...dSnap.data() } });
+            }
+          }
+        }
+
+        const sessionsSnap = await getDocs(query(collection(db, 'sessions'), where('candidateId', '==', candidateDoc.id)));
+        const session = !sessionsSnap.empty ? { id: sessionsSnap.docs[0].id, ...sessionsSnap.docs[0].data() } : null;
+
+        // Convert Timestamp to ISO string if needed, or just handle it below.
+        const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString();
+
+        candidatesData.push({
+          id: candidateDoc.id,
+          ...data,
+          createdAt,
+          domains: domainDetails,
+          session
+        });
+      }
+      setCandidates(candidatesData as any);
     } catch (error: any) {
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        toast.error('Session expired. Please login again.');
+      if (error.code === 'permission-denied') {
+        toast.error('Session expired or permission denied. Please login again.');
         localStorage.removeItem('adminToken');
         navigate('/admin/login');
       } else {
-        toast.error('Failed to fetch candidates');
+        toast.error('Failed to fetch candidates: ' + error.message);
       }
     } finally {
       setLoading(false);

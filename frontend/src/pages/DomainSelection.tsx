@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import api from '../api/client';
+import { collection, query, getDocs, addDoc, where, serverTimestamp } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import { useStore } from '../store/useStore';
 
 interface Domain {
@@ -28,8 +29,12 @@ export default function DomainSelection() {
 
     const fetchDomains = async () => {
       try {
-        const response = await api.get('/domains');
-        setDomains(response.data);
+        const domainsSnap = await getDocs(collection(db, 'domains'));
+        const domainsData = domainsSnap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Domain[];
+        setDomains(domainsData);
       } catch (error) {
         console.error('Fetch domains error:', error);
         toast.error('Failed to load domains');
@@ -62,18 +67,30 @@ export default function DomainSelection() {
 
     try {
       setLoading(true);
+
+      const existingSnap = await getDocs(query(collection(db, 'candidates'), where('email', '==', registrationData.email)));
+      
+      if (!existingSnap.empty) {
+        const existingDoc = existingSnap.docs[0];
+        setCandidateId(existingDoc.id);
+        toast.success('Welcome back! Resuming your assessment.');
+        navigate('/assessment');
+        return;
+      }
+
       const payload = {
         ...registrationData,
-        domainIds: selectedDomains
+        domainIds: selectedDomains,
+        createdAt: serverTimestamp()
       };
 
-      const response = await api.post('/candidates/register', payload);
-      setCandidateId(response.data.candidateId);
+      const docRef = await addDoc(collection(db, 'candidates'), payload);
+      setCandidateId(docRef.id);
       
-      toast.success(response.data.message || 'Registration complete!');
+      toast.success('Registration complete!');
       navigate('/assessment'); 
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Registration failed');
+      toast.error(error.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
