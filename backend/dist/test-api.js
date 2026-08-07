@@ -1,5 +1,4 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
 const candidateId = "1aeb38dc-5bbb-4d0b-bf96-060078467a2e"; // Hardcoded from check-db
 async function run() {
     const res = await fetch("http://127.0.0.1:5000/api/assessment/start", {
