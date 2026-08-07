@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
-import prisma from '../config/db';
-import { v4 as uuidv4 } from 'uuid';
+import { db, FieldValue } from '../config/firebase';
 
 function shuffleArray<T>(array: T[]): T[] {
   const newArr = [...array];
@@ -15,93 +14,106 @@ export const startAssessment = async (req: Request, res: Response) => {
   try {
     const { candidateId } = req.body;
 
-    const candidate = await prisma.candidate.findUnique({
-      where: { id: candidateId },
-      include: { domains: true }
-    });
-
-    if (!candidate) {
+    const candidateDoc = await db.collection('candidates').doc(candidateId).get();
+    if (!candidateDoc.exists) {
       return res.status(404).json({ error: 'Candidate not found' });
     }
+    const candidate = candidateDoc.data()!;
 
-    const existingSession = await prisma.assessmentSession.findUnique({
-      where: { candidateId }
-    });
+    // Check for existing session
+    const existingSessionSnap = await db.collection('sessions').where('candidateId', '==', candidateId).limit(1).get();
 
-    if (existingSession && existingSession.status === 'COMPLETED') {
-      return res.status(403).json({ error: 'Assessment already completed.' });
+    if (!existingSessionSnap.empty) {
+      const sessionDoc = existingSessionSnap.docs[0];
+      const existingSession = sessionDoc.data();
+
+      if (existingSession.status === 'COMPLETED') {
+        return res.status(403).json({ error: 'Assessment already completed.' });
+      }
+
+      if (existingSession.status === 'TERMINATED') {
+        return res.status(403).json({ error: 'Assessment was terminated due to policy violations.' });
+      }
+
+      if (existingSession.status === 'IN_PROGRESS') {
+        // Resume existing session
+        const answersSnap = await db.collection('answers').where('sessionId', '==', sessionDoc.id).get();
+        const formattedQuestions = [];
+
+        for (const ansDoc of answersSnap.docs) {
+          const ans = ansDoc.data();
+          const questionDoc = await db.collection('questions').doc(ans.questionId).get();
+          if (questionDoc.exists) {
+            const q = questionDoc.data()!;
+            formattedQuestions.push({
+              id: questionDoc.id,
+              text: q.text,
+              options: q.options,
+              selectedOpt: ans.selectedOpt ?? null
+            });
+          }
+        }
+
+        return res.json({
+          sessionId: sessionDoc.id,
+          status: existingSession.status,
+          startTime: existingSession.startTime,
+          questions: formattedQuestions
+        });
+      }
     }
 
-    if (existingSession && existingSession.status === 'TERMINATED') {
-      return res.status(403).json({ error: 'Assessment was terminated due to policy violations.' });
-    }
-
-    if (existingSession && existingSession.status === 'IN_PROGRESS') {
-      // Resume existing session
-      const answers = await prisma.candidateAnswer.findMany({
-        where: { sessionId: existingSession.id },
-        include: { question: true }
-      });
-      
-      const formattedQuestions = answers.map(ans => ({
-        id: ans.question.id,
-        text: ans.question.text,
-        options: ans.question.options,
-        selectedOpt: ans.selectedOpt
-      }));
-
-      return res.json({
-        sessionId: existingSession.id,
-        status: existingSession.status,
-        startTime: existingSession.startTime,
-        questions: formattedQuestions
-      });
-    }
-
-    // New Session Allocation Logic
-    const domainIds = candidate.domains.map(d => d.domainId);
+    // New Session
+    const domainIds = candidate.domainIds || [];
     let selectedQuestions: any[] = [];
 
     const numDomains = domainIds.length;
     const questionsPerDomain = numDomains === 1 ? 30 : numDomains === 2 ? 15 : 10;
 
     for (const domainId of domainIds) {
-      const allDomainQs = await prisma.question.findMany({ where: { domainId } });
+      const allDomainQsSnap = await db.collection('questions').where('domainId', '==', domainId).get();
+      const allDomainQs = allDomainQsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const shuffled = shuffleArray(allDomainQs);
       selectedQuestions.push(...shuffled.slice(0, questionsPerDomain));
     }
 
-    // Final shuffle to mix domains
     selectedQuestions = shuffleArray(selectedQuestions);
 
-    const session = await prisma.assessmentSession.create({
-      data: {
-        candidateId,
-        status: 'IN_PROGRESS',
-        deviceInfo: req.headers['user-agent']
-      }
+    // Create session
+    const sessionRef = await db.collection('sessions').add({
+      candidateId,
+      status: 'IN_PROGRESS',
+      startTime: FieldValue.serverTimestamp(),
+      endTime: null,
+      score: null,
+      deviceInfo: req.headers['user-agent'] || null,
+      violationsCount: 0
     });
 
-    const answerRecords = selectedQuestions.map(q => ({
-      sessionId: session.id,
-      questionId: q.id
-    }));
-
-    await prisma.candidateAnswer.createMany({
-      data: answerRecords
-    });
+    // Create answer records in batch
+    const batch = db.batch();
+    for (const q of selectedQuestions) {
+      const ansRef = db.collection('answers').doc();
+      batch.set(ansRef, {
+        sessionId: sessionRef.id,
+        questionId: q.id,
+        selectedOpt: null,
+        savedAt: FieldValue.serverTimestamp()
+      });
+    }
+    await batch.commit();
 
     const formattedQuestions = selectedQuestions.map(q => ({
       id: q.id,
-      text: q.text,
-      options: q.options,
+      text: (q as any).text,
+      options: (q as any).options,
       selectedOpt: null
     }));
 
     res.status(201).json({
-      sessionId: session.id,
-      status: session.status,
-      startTime: session.startTime,
+      sessionId: sessionRef.id,
+      status: 'IN_PROGRESS',
+      startTime: new Date().toISOString(),
       questions: formattedQuestions
     });
   } catch (error) {
@@ -114,20 +126,25 @@ export const saveAnswer = async (req: Request, res: Response) => {
   try {
     const { sessionId, questionId, selectedOpt } = req.body;
 
-    const session = await prisma.assessmentSession.findUnique({ where: { id: sessionId } });
-
-    if (!session || session.status !== 'IN_PROGRESS') {
+    const sessionDoc = await db.collection('sessions').doc(sessionId).get();
+    if (!sessionDoc.exists || sessionDoc.data()!.status !== 'IN_PROGRESS') {
       return res.status(403).json({ error: 'Invalid or expired session' });
     }
 
-    await prisma.candidateAnswer.update({
-      where: {
-        sessionId_questionId: {
-          sessionId,
-          questionId
-        }
-      },
-      data: { selectedOpt }
+    // Find the answer doc by sessionId + questionId
+    const ansSnap = await db.collection('answers')
+      .where('sessionId', '==', sessionId)
+      .where('questionId', '==', questionId)
+      .limit(1)
+      .get();
+
+    if (ansSnap.empty) {
+      return res.status(404).json({ error: 'Answer record not found' });
+    }
+
+    await ansSnap.docs[0].ref.update({
+      selectedOpt,
+      savedAt: FieldValue.serverTimestamp()
     });
 
     res.json({ message: 'Saved successfully' });
@@ -141,32 +158,32 @@ export const submitAssessment = async (req: Request, res: Response) => {
   try {
     const { sessionId } = req.body;
 
-    const session = await prisma.assessmentSession.findUnique({ where: { id: sessionId } });
-
-    if (!session || session.status !== 'IN_PROGRESS') {
+    const sessionDoc = await db.collection('sessions').doc(sessionId).get();
+    if (!sessionDoc.exists || sessionDoc.data()!.status !== 'IN_PROGRESS') {
       return res.status(403).json({ error: 'Invalid or already submitted session' });
     }
 
     // Calculate score
-    const answers = await prisma.candidateAnswer.findMany({
-      where: { sessionId },
-      include: { question: true }
-    });
-
+    const answersSnap = await db.collection('answers').where('sessionId', '==', sessionId).get();
     let score = 0;
-    for (const ans of answers) {
-      if (ans.selectedOpt === ans.question.correctOption) {
-        score += ans.question.marks;
+
+    for (const ansDoc of answersSnap.docs) {
+      const ans = ansDoc.data();
+      if (ans.selectedOpt != null) {
+        const questionDoc = await db.collection('questions').doc(ans.questionId).get();
+        if (questionDoc.exists) {
+          const q = questionDoc.data()!;
+          if (ans.selectedOpt === q.correctOption) {
+            score += q.marks || 1;
+          }
+        }
       }
     }
 
-    await prisma.assessmentSession.update({
-      where: { id: sessionId },
-      data: {
-        status: 'COMPLETED',
-        endTime: new Date(),
-        score
-      }
+    await db.collection('sessions').doc(sessionId).update({
+      status: 'COMPLETED',
+      endTime: FieldValue.serverTimestamp(),
+      score
     });
 
     res.json({ message: 'Submitted successfully', score });
@@ -180,34 +197,36 @@ export const logViolation = async (req: Request, res: Response) => {
   try {
     const { sessionId, type } = req.body;
 
-    const session = await prisma.assessmentSession.findUnique({ where: { id: sessionId } });
-    if (!session || session.status !== 'IN_PROGRESS') {
+    const sessionDoc = await db.collection('sessions').doc(sessionId).get();
+    if (!sessionDoc.exists || sessionDoc.data()!.status !== 'IN_PROGRESS') {
       return res.status(403).json({ error: 'Invalid session' });
     }
 
-    await prisma.violation.create({
-      data: {
-        sessionId,
-        type,
-        description: 'Frontend violation detected'
-      }
+    // Create violation record
+    await db.collection('violations').add({
+      sessionId,
+      type,
+      timestamp: FieldValue.serverTimestamp(),
+      description: 'Frontend violation detected'
     });
 
-    const updatedSession = await prisma.assessmentSession.update({
-      where: { id: sessionId },
-      data: { violationsCount: { increment: 1 } }
+    // Increment violations count
+    const currentCount = sessionDoc.data()!.violationsCount || 0;
+    const newCount = currentCount + 1;
+
+    await db.collection('sessions').doc(sessionId).update({
+      violationsCount: newCount
     });
 
-    if (updatedSession.violationsCount >= 3) {
-      // Auto submit
-      await prisma.assessmentSession.update({
-        where: { id: sessionId },
-        data: { status: 'TERMINATED', endTime: new Date() }
+    if (newCount >= 3) {
+      await db.collection('sessions').doc(sessionId).update({
+        status: 'TERMINATED',
+        endTime: FieldValue.serverTimestamp()
       });
       return res.json({ terminated: true });
     }
 
-    res.json({ terminated: false, violationsCount: updatedSession.violationsCount });
+    res.json({ terminated: false, violationsCount: newCount });
   } catch (error) {
     console.error('Log violation error:', error);
     res.status(500).json({ error: 'Internal server error' });

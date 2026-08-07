@@ -26,7 +26,7 @@ import assessmentRoutes from './routes/assessment.routes';
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date() });
+  res.json({ status: 'OK', timestamp: new Date(), db: 'Firebase Firestore' });
 });
 
 app.use('/api/admin', adminRoutes);

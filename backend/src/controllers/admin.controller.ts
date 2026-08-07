@@ -1,28 +1,29 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import prisma from '../config/db';
+import { db } from '../config/firebase';
 
 export const login = async (req: Request, res: Response) => {
   try {
     const { username, password } = req.body;
 
-    const admin = await prisma.adminUser.findUnique({
-      where: { username }
-    });
+    const adminSnap = await db.collection('admins').where('username', '==', username).limit(1).get();
 
-    if (!admin) {
+    if (adminSnap.empty) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const isMatch = await bcrypt.compare(password, admin.passwordHash);
+    const adminDoc = adminSnap.docs[0];
+    const adminData = adminDoc.data();
+
+    const isMatch = await bcrypt.compare(password, adminData.passwordHash);
 
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const token = jwt.sign(
-      { id: admin.id, username: admin.username, role: admin.role },
+      { id: adminDoc.id, username: adminData.username, role: adminData.role },
       process.env.JWT_SECRET || 'secret',
       { expiresIn: '1d' }
     );
@@ -31,9 +32,9 @@ export const login = async (req: Request, res: Response) => {
       message: 'Login successful',
       token,
       user: {
-        id: admin.id,
-        username: admin.username,
-        role: admin.role
+        id: adminDoc.id,
+        username: adminData.username,
+        role: adminData.role
       }
     });
   } catch (error) {
@@ -44,20 +45,19 @@ export const login = async (req: Request, res: Response) => {
 
 export const getDashboardStats = async (req: Request, res: Response) => {
   try {
-    const totalCandidates = await prisma.candidate.count();
-    const completedAssessments = await prisma.assessmentSession.count({
-      where: { status: 'COMPLETED' }
-    });
-    
-    // Additional stats can be aggregated here
-    
+    const candidatesSnap = await db.collection('candidates').get();
+    const totalCandidates = candidatesSnap.size;
+
+    const completedSnap = await db.collection('sessions').where('status', '==', 'COMPLETED').get();
+    const completedAssessments = completedSnap.size;
+
     res.json({
       totalCandidates,
       completedAssessments,
-      liveCandidates: 0, // Placeholder
-      averageScore: 0, // Placeholder
-      highestScore: 0, // Placeholder
-      lowestScore: 0 // Placeholder
+      liveCandidates: 0,
+      averageScore: 0,
+      highestScore: 0,
+      lowestScore: 0
     });
   } catch (error) {
     console.error('Stats error:', error);
