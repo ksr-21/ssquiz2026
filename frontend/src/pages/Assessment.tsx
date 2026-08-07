@@ -22,7 +22,7 @@ export default function Assessment() {
   const [markedForReview, setMarkedForReview] = useState<Set<number>>(new Set());
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<any>(null);
 
   useEffect(() => {
     if (!candidateId) {
