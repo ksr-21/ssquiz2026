@@ -20,6 +20,7 @@ function App() {
           <Route path="/result" element={<Result />} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/admin/tables" element={<AdminDashboard />} />
         </Routes>
         <ToastContainer position="top-right" autoClose={3000} />
       </div>
