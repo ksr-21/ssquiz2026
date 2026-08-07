@@ -67,9 +67,9 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-secondaryBg flex flex-col">
       {/* Navbar */}
-      <header className="bg-white border-b border-border p-4 px-8 flex justify-between items-center shadow-sm">
-        <h1 className="text-2xl font-bold text-primary">Success Squad Admin</h1>
-        <div className="flex gap-4">
+      <header className="bg-white border-b border-border p-4 md:px-8 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0 shadow-sm">
+        <h1 className="text-xl md:text-2xl font-bold text-primary">Success Squad Admin</h1>
+        <div className="flex w-full md:w-auto justify-between md:justify-start gap-2 md:gap-4">
           <button 
             onClick={fetchCandidates}
             className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-textPrimary rounded-lg font-medium transition"
@@ -89,13 +89,13 @@ export default function AdminDashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-2 md:p-8">
         <div className="bg-white rounded-xl shadow-md border border-border flex flex-col h-full overflow-hidden">
           
           {/* Toolbar */}
-          <div className="p-4 border-b border-border flex justify-between items-center bg-gray-50">
+          <div className="p-4 border-b border-border flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-50">
             <h2 className="text-lg font-bold text-textPrimary">Candidates List ({filteredCandidates.length})</h2>
-            <div className="relative w-72">
+            <div className="relative w-full md:w-72">
               <input 
                 type="text" 
                 placeholder="Search by name or email..." 

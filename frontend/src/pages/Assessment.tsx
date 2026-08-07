@@ -251,26 +251,26 @@ export default function Assessment() {
           </div>
 
           {/* Action Buttons */}
-          <div className="mt-8 flex justify-between items-center pt-6 border-t border-border">
+          <div className="mt-8 flex flex-wrap justify-between items-center gap-3 pt-6 border-t border-border">
             <button
               onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
               disabled={currentIndex === 0}
-              className="px-6 py-2 rounded-lg font-medium text-textSecondary bg-gray-100 hover:bg-gray-200 disabled:opacity-50 transition"
+              className="flex-1 min-w-[80px] px-3 py-2 md:px-6 md:py-2 rounded-lg font-medium text-sm md:text-base text-textSecondary bg-gray-100 hover:bg-gray-200 disabled:opacity-50 transition text-center"
             >
-              Previous
+              Prev
             </button>
             <button
               onClick={toggleReview}
-              className={`px-6 py-2 rounded-lg font-medium transition ${
+              className={`flex-[2] min-w-[120px] px-3 py-2 md:px-6 md:py-2 rounded-lg font-medium text-sm md:text-base transition text-center ${
                 markedForReview.has(currentIndex) ? 'bg-warning text-white' : 'bg-gray-100 text-textSecondary hover:bg-gray-200'
               }`}
             >
-              {markedForReview.has(currentIndex) ? 'Unmark Review' : 'Mark for Review'}
+              {markedForReview.has(currentIndex) ? 'Unmark Review' : 'Mark Review'}
             </button>
             <button
               onClick={() => setCurrentIndex(prev => Math.min(questions.length - 1, prev + 1))}
               disabled={currentIndex === questions.length - 1}
-              className="px-6 py-2 rounded-lg font-medium text-white bg-primary hover:bg-blue-700 disabled:opacity-50 transition"
+              className="flex-1 min-w-[80px] px-3 py-2 md:px-6 md:py-2 rounded-lg font-medium text-sm md:text-base text-white bg-primary hover:bg-blue-700 disabled:opacity-50 transition text-center"
             >
               Next
             </button>

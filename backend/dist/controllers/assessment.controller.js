@@ -29,6 +29,9 @@ const startAssessment = async (req, res) => {
         if (existingSession && existingSession.status === 'COMPLETED') {
             return res.status(403).json({ error: 'Assessment already completed.' });
         }
+        if (existingSession && existingSession.status === 'TERMINATED') {
+            return res.status(403).json({ error: 'Assessment was terminated due to policy violations.' });
+        }
         if (existingSession && existingSession.status === 'IN_PROGRESS') {
             // Resume existing session
             const answers = await db_1.default.candidateAnswer.findMany({

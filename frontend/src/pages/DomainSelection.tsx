@@ -84,11 +84,11 @@ export default function DomainSelection() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-secondaryBg p-4 md:p-8">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-2xl border border-border">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary mb-2">Select Your Domains</h1>
-          <p className="text-textSecondary">Choose between 1 and 3 domains for your assessment.</p>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-secondaryBg md:p-8">
+      <div className="bg-white py-10 px-6 md:p-8 md:rounded-2xl md:shadow-xl w-full max-w-2xl md:border border-border min-h-screen md:min-h-0 flex flex-col justify-start md:justify-center">
+        <div className="text-center mb-6 md:mb-8 mt-4 md:mt-0">
+          <h1 className="text-2xl md:text-3xl font-bold text-primary mb-2">Select Your Domains</h1>
+          <p className="text-sm md:text-base text-textSecondary">Choose between 1 and 3 domains for your assessment.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">

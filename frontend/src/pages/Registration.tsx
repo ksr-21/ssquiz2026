@@ -38,11 +38,11 @@ export default function Registration() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-secondaryBg p-4 md:p-8">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-2xl border border-border">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary mb-2">Success Squad Assessment</h1>
-          <p className="text-textSecondary">Please fill in your details to start the registration process.</p>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-secondaryBg md:p-8">
+      <div className="bg-white py-10 px-6 md:p-8 md:rounded-2xl md:shadow-xl w-full max-w-2xl md:border border-border min-h-screen md:min-h-0 flex flex-col justify-start md:justify-center">
+        <div className="text-center mb-6 md:mb-8 mt-4 md:mt-0">
+          <h1 className="text-2xl md:text-3xl font-bold text-primary mb-2">Success Squad Assessment</h1>
+          <p className="text-sm md:text-base text-textSecondary">Please fill in your details to start the registration process.</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -51,7 +51,7 @@ export default function Registration() {
               <label className="block text-sm font-medium text-textPrimary mb-1">Full Name *</label>
               <input 
                 {...register('fullName', { required: 'Full Name is required' })} 
-                className="w-full px-4 py-2 rounded-lg border border-border focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+                className="w-full px-4 py-3 md:py-2 rounded-lg border border-border focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
                 placeholder="John Doe"
               />
               {errors.fullName && <p className="text-error text-xs mt-1">{errors.fullName.message}</p>}
@@ -64,7 +64,7 @@ export default function Registration() {
                   required: 'Email is required',
                   pattern: { value: /^\S+@\S+$/i, message: 'Invalid email address' }
                 })} 
-                className="w-full px-4 py-2 rounded-lg border border-border focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+                className="w-full px-4 py-3 md:py-2 rounded-lg border border-border focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
                 placeholder="john@example.com"
               />
               {errors.email && <p className="text-error text-xs mt-1">{errors.email.message}</p>}
@@ -77,7 +77,7 @@ export default function Registration() {
                   required: 'Mobile Number is required',
                   pattern: { value: /^[0-9]{10}$/, message: 'Must be 10 digits' }
                 })} 
-                className="w-full px-4 py-2 rounded-lg border border-border focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+                className="w-full px-4 py-3 md:py-2 rounded-lg border border-border focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
                 placeholder="9876543210"
               />
               {errors.mobileNumber && <p className="text-error text-xs mt-1">{errors.mobileNumber.message}</p>}
@@ -87,7 +87,7 @@ export default function Registration() {
               <label className="block text-sm font-medium text-textPrimary mb-1">College *</label>
               <select 
                 {...register('college', { required: 'College is required' })}
-                className="w-full px-4 py-2 rounded-lg border border-border focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition bg-white"
+                className="w-full px-4 py-3 md:py-2 rounded-lg border border-border focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition bg-white"
               >
                 <option value="">Select College</option>
                 <option value="JSPM NTC">JSPM NTC</option>
@@ -100,7 +100,7 @@ export default function Registration() {
               <label className="block text-sm font-medium text-textPrimary mb-1">Year of Study *</label>
               <select 
                 {...register('yearOfStudy', { required: 'Year is required' })}
-                className="w-full px-4 py-2 rounded-lg border border-border focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition bg-white"
+                className="w-full px-4 py-3 md:py-2 rounded-lg border border-border focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition bg-white"
               >
                 <option value="">Select Year</option>
                 <option value="Second Year">Second Year</option>
@@ -114,11 +114,10 @@ export default function Registration() {
               <label className="block text-sm font-medium text-textPrimary mb-1">Branch *</label>
               <select 
                 {...register('branch', { required: 'Branch is required' })}
-                className="w-full px-4 py-2 rounded-lg border border-border focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition bg-white"
+                className="w-full px-4 py-3 md:py-2 rounded-lg border border-border focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition bg-white"
               >
                 <option value="">Select Your Branch</option>
                 <option value="Computer Engineering">Computer Engineering</option>
-                <option value="Information Technology">Information Technology</option>
                 <option value="Artificial Intelligence & Data Science">Artificial Intelligence & Data Science</option>
                 <option value="Electronics & Telecommunication">Electronics & Telecommunication</option>
                 <option value="Mechanical Engineering">Mechanical Engineering</option>

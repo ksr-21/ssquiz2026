@@ -29,8 +29,8 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-secondaryBg p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-border">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-secondaryBg md:p-4">
+      <div className="bg-white p-8 md:rounded-2xl md:shadow-xl w-full max-w-md md:border border-border min-h-screen md:min-h-0 flex flex-col justify-center">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-primary mb-2">Admin Portal</h1>
           <p className="text-textSecondary">Sign in to manage the assessment</p>

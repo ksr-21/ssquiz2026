@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.registerCandidate = void 0;
+exports.getCandidates = exports.registerCandidate = void 0;
 const db_1 = __importDefault(require("../config/db"));
 const registerCandidate = async (req, res) => {
     try {
@@ -19,7 +19,19 @@ const registerCandidate = async (req, res) => {
             where: { email }
         });
         if (existingCandidate) {
-            return res.status(400).json({ error: 'Candidate with this email already registered.' });
+            if (email === 'mayureshjagu1306@gmail.com') {
+                // Special testing email: Delete their old records to allow a fresh start every time
+                await db_1.default.assessmentSession.deleteMany({ where: { candidateId: existingCandidate.id } });
+                await db_1.default.candidateDomain.deleteMany({ where: { candidateId: existingCandidate.id } });
+                await db_1.default.candidate.delete({ where: { id: existingCandidate.id } });
+            }
+            else {
+                // If the candidate already exists, allow them to log back in to resume their test.
+                return res.status(200).json({
+                    message: 'Welcome back! Resuming your assessment.',
+                    candidateId: existingCandidate.id
+                });
+            }
         }
         // Create Candidate and their Domain selections
         const candidate = await db_1.default.candidate.create({
@@ -53,3 +65,20 @@ const registerCandidate = async (req, res) => {
     }
 };
 exports.registerCandidate = registerCandidate;
+const getCandidates = async (req, res) => {
+    try {
+        const candidates = await db_1.default.candidate.findMany({
+            include: {
+                domains: { include: { domain: true } },
+                session: true
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(candidates);
+    }
+    catch (error) {
+        console.error('Error fetching candidates:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.getCandidates = getCandidates;

@@ -25,8 +25,8 @@ export default function Result() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-secondaryBg p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-border text-center">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-secondaryBg md:p-8">
+      <div className="bg-white p-8 md:rounded-2xl md:shadow-xl w-full max-w-md md:border border-border text-center min-h-screen md:min-h-0 flex flex-col justify-center">
         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
