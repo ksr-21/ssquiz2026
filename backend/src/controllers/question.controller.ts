@@ -3,7 +3,7 @@ import prisma from '../config/db';
 
 export const getQuestionsByDomain = async (req: Request, res: Response) => {
   try {
-    const { domainId } = req.params;
+    const domainId = req.params.domainId as string;
     const questions = await prisma.question.findMany({
       where: { domainId }
     });
@@ -42,7 +42,7 @@ export const addQuestion = async (req: Request, res: Response) => {
 
 export const deleteQuestion = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     await prisma.question.delete({
       where: { id }
     });

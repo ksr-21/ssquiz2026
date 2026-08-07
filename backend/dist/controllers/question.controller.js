@@ -7,7 +7,7 @@ exports.deleteQuestion = exports.addQuestion = exports.getQuestionsByDomain = vo
 const db_1 = __importDefault(require("../config/db"));
 const getQuestionsByDomain = async (req, res) => {
     try {
-        const { domainId } = req.params;
+        const domainId = req.params.domainId;
         const questions = await db_1.default.question.findMany({
             where: { domainId }
         });
@@ -45,7 +45,7 @@ const addQuestion = async (req, res) => {
 exports.addQuestion = addQuestion;
 const deleteQuestion = async (req, res) => {
     try {
-        const { id } = req.params;
+        const id = req.params.id;
         await db_1.default.question.delete({
             where: { id }
         });
