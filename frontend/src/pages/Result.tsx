@@ -33,12 +33,7 @@ export default function Result() {
           </svg>
         </div>
         <h1 className="text-3xl font-bold text-primary mb-2">Assessment Completed!</h1>
-        <p className="text-textSecondary mb-8">Thank you for participating in the Success Squad recruitment process.</p>
-        
-        <div className="bg-gray-50 p-6 rounded-xl border border-border mb-8">
-          <p className="text-sm text-textSecondary uppercase tracking-wide font-semibold mb-1">Your Score</p>
-          <p className="text-5xl font-bold text-textPrimary">{score}</p>
-        </div>
+        <p className="text-textSecondary mb-8">Thank you for participating in the Success Squad recruitment process. Your responses have been submitted successfully.</p>
 
         <button 
           onClick={() => navigate('/')}

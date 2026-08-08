@@ -53,15 +53,18 @@ export default function Assessment() {
           sessionStartTime = existingSession.startTime;
           
           const answersSnap = await getDocs(query(collection(db, 'answers'), where('sessionId', '==', sessionRefId)));
-          for (const ansDoc of answersSnap.docs) {
-            const ans = ansDoc.data();
+          const sortedAnsDocs = answersSnap.docs
+            .map(d => d.data())
+            .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+
+          for (const ans of sortedAnsDocs) {
             const questionDoc = await getDoc(doc(db, 'questions', ans.questionId));
             if (questionDoc.exists()) {
               const q = questionDoc.data();
               formattedQuestions.push({
                 id: questionDoc.id,
                 text: q.text,
-                options: q.options,
+                options: ans.options || q.options,
                 selectedOpt: ans.selectedOpt ?? null
               });
             }
@@ -69,17 +72,19 @@ export default function Assessment() {
         } else {
           // New Session
           const domainIds = candidate.domainIds || [];
-          const numDomains = domainIds.length;
+          // Shuffle domain order if multiple domains are selected
+          const shuffledDomainIds = [...domainIds].sort(() => 0.5 - Math.random());
+          const numDomains = shuffledDomainIds.length;
           const questionsPerDomain = numDomains === 1 ? 30 : numDomains === 2 ? 15 : 10;
           let selectedQuestions: any[] = [];
 
-          for (const domainId of domainIds) {
+          // Group and shuffle questions domain-wise
+          for (const domainId of shuffledDomainIds) {
             const allDomainQsSnap = await getDocs(query(collection(db, 'questions'), where('domainId', '==', domainId)));
             const allDomainQs = allDomainQsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
             const shuffled = [...allDomainQs].sort(() => 0.5 - Math.random());
             selectedQuestions.push(...shuffled.slice(0, questionsPerDomain));
           }
-          selectedQuestions = [...selectedQuestions].sort(() => 0.5 - Math.random());
 
           const sessionRef = await addDoc(collection(db, 'sessions'), {
             candidateId,
@@ -94,23 +99,31 @@ export default function Assessment() {
           sessionStartTime = new Date(); // Approximate since serverTimestamp is pending
 
           const batch = writeBatch(db);
-          for (const q of selectedQuestions) {
+          formattedQuestions = [];
+
+          for (let i = 0; i < selectedQuestions.length; i++) {
+            const q = selectedQuestions[i];
             const ansRef = doc(collection(db, 'answers'));
+            // Shuffle options for this question
+            const shuffledOpts = [...(q.options || [])].sort(() => 0.5 - Math.random());
+
             batch.set(ansRef, {
               sessionId: sessionRefId,
               questionId: q.id,
+              options: shuffledOpts,
               selectedOpt: null,
+              orderIndex: i,
               savedAt: serverTimestamp()
+            });
+
+            formattedQuestions.push({
+              id: q.id,
+              text: q.text,
+              options: shuffledOpts,
+              selectedOpt: null
             });
           }
           await batch.commit();
-
-          formattedQuestions = selectedQuestions.map(q => ({
-            id: q.id,
-            text: q.text,
-            options: q.options,
-            selectedOpt: null
-          }));
         }
 
         setSessionId(sessionRefId);
@@ -170,7 +183,20 @@ export default function Assessment() {
           const questionDoc = await getDoc(doc(db, 'questions', ans.questionId));
           if (questionDoc.exists()) {
             const q = questionDoc.data();
-            if (ans.selectedOpt === q.correctOption) {
+            const optsDisplayed = ans.options || q.options || [];
+            const selectedText = optsDisplayed[ans.selectedOpt];
+
+            let correctIndex: number | undefined = q.correctOption;
+            if (correctIndex === undefined && q.correctAnswer) {
+              const mapping: Record<string, number> = { 'A': 0, 'B': 1, 'C': 2, 'D': 3 };
+              correctIndex = mapping[String(q.correctAnswer).trim().toUpperCase()];
+            }
+
+            const correctText = (correctIndex !== undefined && q.options && q.options[correctIndex] !== undefined)
+              ? q.options[correctIndex]
+              : q.correctAnswer;
+
+            if (selectedText && correctText && String(selectedText).trim() === String(correctText).trim()) {
               score += q.marks || 1;
             }
           }
